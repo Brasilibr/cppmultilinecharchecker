@@ -5,6 +5,7 @@
 #include <cstring>
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <ostream>
 #include <algorithm>
 
@@ -19,7 +20,8 @@ enum jvar_types{
     JSTRING,
     JOBJECT,
     JARRAY,
-    JNULL
+    JNULL,
+    JVAR_TYPES_LENGTH//to not be used as val
 };
 
 class Mnull{
@@ -30,22 +32,33 @@ class Mnull{
 #define lInt long long int
 #define jcmp [](jvar& a, jvar& b)
 
+#define USE_UNORDERED_MAP true
+#ifdef USE_UNORDERED_MAP
+#define jMapType std::unordered_map
+#elif 
+#define jMapType std::map
+#endif
+
 class jvar;
 /*JItem, used to initialize a J Object members */
 typedef std::pair<std::string,jvar> ji;
 /*shorthand for std::vector<jvar> ( jvar array )*/
 typedef std::vector<jvar> ja;
-/*shorthand for std::map<std::string,jvar> (jvar object)*/
-typedef std::map<std::string,jvar> jo;
+/*shorthand for jMapType<std::string,jvar> (jvar object)*/
+typedef jMapType<std::string,jvar> jo;
 
-struct JvarIterableType {
+
+class JObjectIterators;
+class JvarIterableType {
+public:
     jvar* root;
     jvar* p;
-    std::map<std::string, jvar>::iterator it;
-    std::map<std::string, jvar>::iterator itend;
+    JObjectIterators *iters;
     size_t i;
+    jvar_types tp;
     JvarIterableType(jvar* parg);
     JvarIterableType(jvar* parg, bool end);
+    ~JvarIterableType();
     bool operator!=(JvarIterableType rhs);
     jvar& operator*() {return *p;}
     void operator++();
@@ -79,10 +92,11 @@ public:
     jvar();
     jvar(const std::string &valarg);
     jvar(const std::vector<jvar> &valarg);
-    jvar(const std::map<std::string,jvar> &valarg);
+    jvar(const jMapType<std::string,jvar> &valarg);
     jvar(const char val[]);
     jvar(const jvar &source);
     jvar(jvar &&source) noexcept;
+    
 
     //operators that modify original
     jvar& operator= (jvar&& other) noexcept;
@@ -102,10 +116,6 @@ public:
     long long int asInteger();
     /*serialize to JSON*/
     std::string toJson();
-    /*serialize to XML*/
-    std::string toXml();
-    /*serialize to XML*/
-    std::string toXmlPeekParameters();
     /* Make a Pretty Json for debugging */
     std::string prettyString();
     /*If you are returning a string, returns the original string, not the serializable one*/
@@ -133,17 +143,25 @@ public:
     jvar &operator[](std::string pos) ;
     jvar &operator[](const char pos[]) ;
     jvar &operator[](size_t index) ;
-    /*only do something if jvar is a string */
+    
+    //return amount of items in jvar (0 for number,bool,mnull, size for array,map,string)
     size_t size();
+    //return the amount of memory being used by jvar
     size_t memoryFootPrint();
 
     bool isEmpty();
+
+    //JS like, functions to transform any type into arrays
+    //return array of arrays [key,value] (for object, array) or empty array
     jvar entries();
+    //return array of keys(for object,array) or empty array
     jvar keys();
+    //return array of values
     jvar values();
     
     /*string and object indexOf*/
     size_t indexOf(std::string str, size_t start=0);
+    /*string and object lastIndexOf*/
     size_t lastIndexOf(std::string str, size_t start=-1);
 
     /*string only functions*/
@@ -168,16 +186,24 @@ public:
     jvar split(std::string separator);
     /*array only function, tranform array into string separated by @separator*/
     jvar join(std::string separator);
-    /*array only function, start an jvar array with N null elements*/
+    /*array only function, start a jvar array with N null elements*/
     jvar &allocateArrayWithNElements(size_t n);
+    /*preallocate the memory for N items(characters) for arrays or strings*/
+    void reserveMemoryForItems(size_t nItems);
     
     /*object only*/
     size_t eraseItem(std::string key);
 
+    //array only
+    void append(jvar item);
+    void appendRef(jvar &item);
     /*array only sort*/
     void sortAsc();
     void sortDesc();
     void sort(std::function<bool(jvar&, jvar&)> comparatorFunction);
+
+    jvar filter(std::function<bool(jvar&)> filterFunction);
+
     
     //Equality operators
     friend bool operator==(const jvar &left, const jvar &right);
@@ -186,6 +212,7 @@ public:
     friend bool operator>=(const jvar &left, const jvar &right);
     friend bool operator<(const jvar &left, const jvar &right);
     friend bool operator<=(const jvar &left, const jvar &right);
+    bool const operator ! ();
     //friend char operator<=>(const jvar &left, const jvar &right);
 
     //Math Operators
@@ -301,6 +328,7 @@ public:
     friend bool operator==(long long int left, const jvar &right);
     friend bool operator==(const char left[], const jvar &right);
 
+    friend bool operator!=(jvar left, const bool &right);
     friend bool operator!=(jvar left, const double &right);
     friend bool operator!=(jvar left, const int &right);
     friend bool operator!=(jvar left, const long int &right);
@@ -430,6 +458,12 @@ public:
 
 };
 
+
+class JObjectIterators {
+public:
+    jMapType<std::string, jvar>::iterator it; 
+    jMapType<std::string, jvar>::iterator itend;
+};
 
 
 #endif

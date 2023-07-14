@@ -21,15 +21,19 @@ jvar::~jvar()
     deleteCurrent();
 }
 
-JvarIterableType::JvarIterableType(jvar* parg) : root(parg) 
+//jvar iteratable constructor (type for for each)
+JvarIterableType::JvarIterableType(jvar* parg) : root(parg), iters(NULL)
 {
-    switch (root->getType())
+    iters=NULL;
+    tp =root->getType();
+    switch (tp)
     {
         case JOBJECT:
-            it = ((std::map<std::string,jvar>*)root->getBuffer())->begin();
-            itend = ((std::map<std::string,jvar>*)root->getBuffer())->end();
-            p = &(it->second);
-            if (it==itend)
+            iters = new struct JObjectIterators();
+            iters->it = ((jMapType<std::string,jvar>*)root->getBuffer())->begin();
+            iters->itend = ((jMapType<std::string,jvar>*)root->getBuffer())->end();
+            p = &(iters->it->second);
+            if (iters->it==iters->itend)
                 p=NULL;
         break;
         case JARRAY:
@@ -44,27 +48,37 @@ JvarIterableType::JvarIterableType(jvar* parg) : root(parg)
         break;
     }
 }
-JvarIterableType::JvarIterableType(jvar* parg, bool end) : root(p) 
+//jvar iteratable constructor (contructor for end of for each)
+JvarIterableType::JvarIterableType(jvar* parg, bool end) : root(p),iters(NULL)
 {
     p = NULL;
+    iters=NULL;
+    tp=JNULL;
+}
+JvarIterableType::~JvarIterableType()
+{
+    if (iters!=NULL)
+    {
+        delete iters;
+    }
 }
 void JvarIterableType::operator++() 
 { 
-    switch(root->getType())
+    switch(tp)
     {
-        case JOBJECT:
-            it++;
-            if ((it!=itend))
-                p = &(it->second);
-            else
-                p =NULL;
-        break;
         case JARRAY:
             i++;
             if (i>=root->size())
                 p =NULL;
             else
                 p = &((*root)[i]);
+        break;
+        case JOBJECT:
+            (iters->it)++;
+            if ((iters->it!=iters->itend))
+                p = &(iters->it->second);
+            else
+                p =NULL;
         break;
         default:
             p =NULL;
@@ -128,6 +142,29 @@ void jvar::sort(std::function<bool(jvar&, jvar&)> comparatorFunction)
         return;
     std::sort((*(std::vector<jvar>*)buffer).begin(), (*(std::vector<jvar>*)buffer).end(),comparatorFunction);
 }
+void jvar::append(jvar item)
+{
+    if (type!=JARRAY)
+        return;
+    (*(std::vector<jvar>*)buffer).push_back(item);
+}
+void jvar::appendRef(jvar &item)
+{
+    if (type!=JARRAY)
+        return;
+    (*(std::vector<jvar>*)buffer).push_back(item);
+}
+jvar jvar::filter(std::function<bool(jvar&)> filterFunction)
+{
+    if (type!=JARRAY)
+        (*this);
+    jvar ret = ja{};
+    std::copy_if ((*(std::vector<jvar>*)buffer).begin()
+    , (*(std::vector<jvar>*)buffer).end(), 
+    std::back_inserter((*((std::vector<jvar>*)ret.buffer))), filterFunction  );   //[](int i){return i>=0;}
+return ret;
+}
+
 void jvar::sortAsc()
 {
     if (type!=JARRAY)
@@ -159,7 +196,7 @@ void jvar::deleteCurrent()
         delete ((std::string*)buffer);
         break;
         case JOBJECT:
-        delete ((std::map<std::string,jvar>*)buffer);
+        delete ((jMapType<std::string,jvar>*)buffer);
         break;
         case JARRAY:
         delete ((std::vector<jvar>*)buffer);
@@ -175,7 +212,7 @@ size_t jvar::eraseItem(std::string key)
     switch(type)
     {
         case JOBJECT:
-            return ((std::map<std::string,jvar>*)buffer)->erase(key);
+            return ((jMapType<std::string,jvar>*)buffer)->erase(key);
         break;
         default:  
             return 0;
@@ -203,7 +240,7 @@ void jvar::copyInit(const jvar &source)
         buffer = (char*) new std::string((*(std::string*)source.buffer));
         break;
         case JOBJECT:
-        buffer = (char*) new std::map<std::string,jvar>((*(std::map<std::string,jvar>*)source.buffer));
+        buffer = (char*) new jMapType<std::string,jvar>((*(jMapType<std::string,jvar>*)source.buffer));
         break;
         case JARRAY:
         buffer = (char*) new std::vector<jvar>((*(std::vector<jvar>*)source.buffer));
@@ -332,9 +369,9 @@ jvar::jvar(const std::vector<jvar> &valarg)
     buffer = (char*) new std::vector<jvar>(valarg);
     type = JARRAY;
 }
-jvar::jvar(const std::map<std::string,jvar> &valarg)
+jvar::jvar(const jMapType<std::string,jvar> &valarg)
 {
-    buffer = (char*) new std::map<std::string,jvar>(valarg);
+    buffer = (char*) new jMapType<std::string,jvar>(valarg);
     type = JOBJECT;
 }
 jvar::jvar(const char val[])
@@ -468,8 +505,8 @@ std::string jvar::prettyString()
         break;
         case JOBJECT:
         {
-            std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) buffer;
-            std::map<std::string, jvar>::iterator it = tempm->begin();
+            jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) buffer;
+            jMapType<std::string, jvar>::iterator it = tempm->begin();
             ret = "{\r\n";
             while (it != tempm->end())
             {
@@ -545,8 +582,8 @@ std::string jvar::toJson()
         break;
         case JOBJECT:
         {
-            std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) buffer;
-            std::map<std::string, jvar>::iterator it = tempm->begin();
+            jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) buffer;
+            jMapType<std::string, jvar>::iterator it = tempm->begin();
             ret = "{";
             while (it != tempm->end())
             {
@@ -580,142 +617,6 @@ std::string jvar::toJson()
     }
     return ret;
 }
-/*ToXML*/
-std::string jvar::toXml()
-{
-    std::string ret;
-    std::string find = "\"";
-    std::string replace = "\\\"";
-    switch(type)
-    {
-        case JBOOL:
-            if ((*(bool*)buffer))
-                ret = "true";
-            else    
-                ret = "false";
-            return ret;
-        break;
-        case JLONGINTEGER:
-            return std::to_string((*(long long int*)buffer));
-        break;
-        case JNUMBER:
-            ret = std::to_string((*(double*)buffer));
-            ret.erase ( ret.find_last_not_of('0') + 1, std::string::npos );
-            if (ret.size()>1 && ret.at(ret.size()-1)=='.')
-                ret.erase ( ret.find_last_not_of('.')+1, std::string::npos );
-            return ret;
-        break;
-        case JSTRING:
-           ret = (*(std::string*)buffer);
-
-           replaceAllInternal(ret,"<","&#60;");
-           replaceAllInternal(ret,"&","&#38;");
-           replaceAllInternal(ret,">","&#62;");
-           replaceAllInternal(ret,"'","&#39;");
-           replaceAllInternal(ret,"\"","&#34;");
-            
-            return "\""+ret+"\"";                
-        break;
-        case JOBJECT:
-        {
-            std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) buffer;
-            std::map<std::string, jvar>::iterator it = tempm->begin();
-
-            it = tempm->begin();
-            while (it != tempm->end())
-            {
-                if (it->first.find("@")==std::string::npos)
-                {
-                    ret += "\t<"+it->first+" " + it->second.toXmlPeekParameters()+" >" +it->second.toXml();
-                }
-                it++;
-                if (it == tempm->end())
-                    break;
-                ret+="\r\n";
-            }
-            ret += "\r\n>\r\n";
-
-            return ret;
-        }
-        break;
-        case JARRAY:
-        {
-            std::vector<jvar> *temp = ((std::vector<jvar>*) buffer);
-            for (size_t i = 0; i < temp->size(); i++)
-            {
-                ret += "\t"+(*temp)[i].toXml();
-                if (i<temp->size()-1)
-                    ret+="\r\n";
-            }
-            return ret;
-        }
-            break;
-        case JNULL:
-            return "";    
-        break;
-    }
-    return ret;
-}
-
-
-std::string jvar::toXmlPeekParameters()
-{
-    std::string ret;
-    std::string find = "\"";
-    std::string replace = "\\\"";
-    switch(type)
-    {
-        case JBOOL:
-            if ((*(bool*)buffer))
-                ret = "true";
-            else    
-                ret = "false";
-            return ret;
-        break;
-        case JLONGINTEGER:
-            return std::to_string((*(long long int*)buffer));
-        break;
-        case JNUMBER:
-            ret = std::to_string((*(double*)buffer));
-            ret.erase ( ret.find_last_not_of('0') + 1, std::string::npos );
-            if (ret.size()>1 && ret.at(ret.size()-1)=='.')
-                ret.erase ( ret.find_last_not_of('.')+1, std::string::npos );
-            return ret;
-        break;
-        case JSTRING:
-           ret = (*(std::string*)buffer);
-
-           replaceAllInternal(ret,"<","&#60;");
-           replaceAllInternal(ret,"&","&#38;");
-           replaceAllInternal(ret,">","&#62;");
-           replaceAllInternal(ret,"'","&#39;");
-           replaceAllInternal(ret,"\"","&#34;");
-            
-            return ret;                
-        break;
-        case JOBJECT:
-        {
-            std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) buffer;
-            std::map<std::string, jvar>::iterator it = tempm->begin();
-            
-            while (it != tempm->end())
-            {
-                if (it->first.find("@")!=std::string::npos)
-                {
-                    ret += " "+it->first.substr(1)+"=\""+it->second.toXmlPeekParameters()+"\"";
-                }
-                it++;
-                if (it == tempm->end())
-                    break;
-            }
-            return ret;
-        }
-        break;
-        default:
-            return "";
-    }
-    return ret;
-}
 
 
 /*If you are returning a string, returns the original string, not the serializable one*/
@@ -746,16 +647,16 @@ jvar & jvar::operator[](const char pos[])
     if (type!=JOBJECT)  
     {
         deleteCurrent();
-        buffer = (char*) new std::map<std::string,jvar>();
+        buffer = (char*) new jMapType<std::string,jvar>();
         type = JOBJECT;
     }
     if (type==JOBJECT)
         try{
-            return ((std::map<std::string,jvar>*) buffer)->at(pos);
+            return ((jMapType<std::string,jvar>*) buffer)->at(pos);
         }catch(std::out_of_range e)
         {
-            ((std::map<std::string,jvar>*) buffer)->emplace(ji(pos,jvar()));
-            return ((std::map<std::string,jvar>*) buffer)->at(pos);
+            ((jMapType<std::string,jvar>*) buffer)->emplace(ji(pos,jvar()));
+            return ((jMapType<std::string,jvar>*) buffer)->at(pos);
         }
         logwarn( "Warning, trying to access non object as object, returning selfval jvar(Something must be wrong!!)" );
         return (*this);
@@ -765,16 +666,16 @@ jvar & jvar::operator[](std::string pos)
     if (type!=JOBJECT)
     {
         deleteCurrent();
-        buffer = (char*) new std::map<std::string,jvar>();
+        buffer = (char*) new jMapType<std::string,jvar>();
         type = JOBJECT;
     }
     if (type==JOBJECT)
         try{
-            return ((std::map<std::string,jvar>*) buffer)->at(pos);
+            return ((jMapType<std::string,jvar>*) buffer)->at(pos);
         }catch(std::out_of_range e)
         {
-            ((std::map<std::string,jvar>*) buffer)->emplace(ji(pos,jvar()));
-            return ((std::map<std::string,jvar>*) buffer)->at(pos);
+            ((jMapType<std::string,jvar>*) buffer)->emplace(ji(pos,jvar()));
+            return ((jMapType<std::string,jvar>*) buffer)->at(pos);
         }
         logwarn( "Warning, trying to access non object as object, returning selfval jvar(Something must be wrong!!)" );
         return (*this);
@@ -785,6 +686,28 @@ jvar & jvar::allocateArrayWithNElements(size_t n) {
     buffer = (char*) new std::vector<jvar>(n,jvar());
     type = JARRAY;
     return (*this);
+}
+
+void jvar::reserveMemoryForItems(size_t nItems){
+    switch(type)
+    {
+        case JSTRING:
+            (*(std::string*)buffer).reserve(nItems);
+        break;
+        case JARRAY:
+            (*((std::vector<jvar>*) buffer)).reserve(nItems);                
+        break;
+        case JOBJECT:
+        {
+            #ifdef USE_UNORDERED_MAP
+                (*(jMapType<std::string,jvar>*) buffer).reserve(nItems);
+            #endif
+            return;
+        }
+        default:
+            return;
+    }
+    return;
 }
 
 jvar & jvar::operator[](size_t index) 
@@ -854,7 +777,7 @@ jvar jvar::charAt(size_t pos ) {
     ret = (*(std::string*)buffer).at(pos);
     }catch(std::exception e)
     {
-        logerror(e.what());
+        logerror(__FILE__,"row",__LINE__, "jvar charAt function",e.what());
     }
     return ret;
 }
@@ -1022,7 +945,7 @@ size_t jvar::size()
         case JSTRING:
             return ((std::string*)buffer)->size();
         case JOBJECT:
-            return ((std::map<std::string,jvar>*)buffer)->size();
+            return ((jMapType<std::string,jvar>*)buffer)->size();
         case JARRAY:
             return ((std::vector<jvar>*)buffer)->size();
         default:
@@ -1090,7 +1013,14 @@ size_t jvar::lastIndexOf(std::string str, size_t startFromEnd)
 jvar jvar::substr(size_t start)
 {
     if (type==JSTRING)
-        return  ((std::string*)buffer)->substr(start);
+    {
+        size_t useStart = start;
+        size_t mySize = size();
+        if (start>=mySize)
+            useStart=mySize-1;
+        
+        return  ((std::string*)buffer)->substr(useStart);
+    }
     return MNULL;
 }
 jvar jvar::substr(size_t start, size_t end)
@@ -1106,8 +1036,8 @@ jvar jvar::entries()
         case JOBJECT:
         {
             size_t counter = 0;
-            std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) buffer;
-            std::map<std::string, jvar>::iterator it = tempm->begin();
+            jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) buffer;
+            jMapType<std::string, jvar>::iterator it = tempm->begin();
             jvar ret = ja();
             while (it != tempm->end())
             {
@@ -1145,8 +1075,8 @@ jvar jvar::values()
         case JOBJECT:
         {
             size_t counter = 0;
-            std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) buffer;
-            std::map<std::string, jvar>::iterator it = tempm->begin();
+            jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) buffer;
+            jMapType<std::string, jvar>::iterator it = tempm->begin();
             jvar ret = ja();
             while (it != tempm->end())
             {
@@ -1178,8 +1108,8 @@ jvar jvar::keys()
         case JOBJECT:
         {
             size_t counter = 0;
-            std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) buffer;
-            std::map<std::string, jvar>::iterator it = tempm->begin();
+            jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) buffer;
+            jMapType<std::string, jvar>::iterator it = tempm->begin();
             jvar ret = ja();
             while (it != tempm->end())
             {
@@ -1231,14 +1161,14 @@ size_t jvar::memoryFootPrint()
         break;
         case JOBJECT:
         {
-            std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) buffer;
-            std::map<std::string, jvar>::iterator it = tempm->begin();
+            jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) buffer;
+            jMapType<std::string, jvar>::iterator it = tempm->begin();
             while (it != tempm->end())
             {
                 ret += it->second.memoryFootPrint();
                 it++;
             }
-            return ret + sizeof(jvar)+sizeof(std::map<std::string, jvar>);
+            return ret + sizeof(jvar)+sizeof(jMapType<std::string, jvar>);
         }
         break;
         case JARRAY:
@@ -1507,8 +1437,8 @@ jvar operator+(jvar left, const jvar &right)
                 case JLONGINTEGER:
                 case JNUMBER:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
                     while (it != tempm->end())
                     {
                         it->second = it->second + right;
@@ -1518,10 +1448,10 @@ jvar operator+(jvar left, const jvar &right)
                 break;
                 case JOBJECT:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) right.buffer;
-                    std::map<std::string, jvar> *templeft =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
-                    std::map<std::string, jvar>::iterator leftit = templeft->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) right.buffer;
+                    jMapType<std::string, jvar> *templeft =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar>::iterator leftit = templeft->begin();
                     while (it != tempm->end())
                     {
                         leftit = templeft->find(it->first);
@@ -1533,8 +1463,8 @@ jvar operator+(jvar left, const jvar &right)
                 break;
                 case JBOOL:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
                     while (it != tempm->end())
                     {
                         it->second = it->second.asBoolean() || (*((bool*)right.buffer));
@@ -1569,8 +1499,8 @@ jvar &operator<<(jvar &left, const jvar &right)
                 }
                 case JOBJECT:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) right.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) right.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
                     size_t start = left.size();
                     while (it != tempm->end())
                     {
@@ -1605,8 +1535,8 @@ jvar &operator<<(jvar &left, const jvar &right)
                 }
                 case JOBJECT:
                 {
-                    std::map<std::string, jvar> *tempright =(std::map<std::string, jvar> *) right.buffer;
-                    std::map<std::string, jvar>::iterator it = tempright->begin();
+                    jMapType<std::string, jvar> *tempright =(jMapType<std::string, jvar> *) right.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempright->begin();
                     while (it != tempright->end())
                     {
                         left[it->first.c_str()] = it->second;
@@ -1732,8 +1662,8 @@ jvar operator-(jvar left, const jvar &right)
                 case JLONGINTEGER:
                 case JNUMBER:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
                     while (it != tempm->end())
                     {
                         it->second = it->second - right;
@@ -1743,10 +1673,10 @@ jvar operator-(jvar left, const jvar &right)
                 break;
                 case JOBJECT:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) right.buffer;
-                    std::map<std::string, jvar> *templeft =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
-                    std::map<std::string, jvar>::iterator leftit = templeft->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) right.buffer;
+                    jMapType<std::string, jvar> *templeft =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar>::iterator leftit = templeft->begin();
                     while (it != tempm->end())
                     {
                         leftit = templeft->find(it->first);
@@ -1883,8 +1813,8 @@ jvar operator*(jvar left, const jvar &right)
                 case JLONGINTEGER:
                 case JNUMBER:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
                     while (it != tempm->end())
                     {
                         it->second = it->second * right;
@@ -1894,10 +1824,10 @@ jvar operator*(jvar left, const jvar &right)
                 break;
                 case JOBJECT:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) right.buffer;
-                    std::map<std::string, jvar> *templeft =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
-                    std::map<std::string, jvar>::iterator leftit = templeft->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) right.buffer;
+                    jMapType<std::string, jvar> *templeft =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar>::iterator leftit = templeft->begin();
                     while (it != tempm->end())
                     {
                         leftit = templeft->find(it->first);
@@ -1909,8 +1839,8 @@ jvar operator*(jvar left, const jvar &right)
                 break;
                 case JBOOL:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
                     while (it != tempm->end())
                     {
                         it->second = it->second.asBoolean() && right;
@@ -2004,8 +1934,8 @@ jvar operator/(jvar left, const jvar &right)
                 case JLONGINTEGER:
                 case JNUMBER:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
                     while (it != tempm->end())
                     {
                         it->second = it->second / right;
@@ -2015,10 +1945,10 @@ jvar operator/(jvar left, const jvar &right)
                 break;
                 case JOBJECT:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) right.buffer;
-                    std::map<std::string, jvar> *templeft =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
-                    std::map<std::string, jvar>::iterator leftit = templeft->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) right.buffer;
+                    jMapType<std::string, jvar> *templeft =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar>::iterator leftit = templeft->begin();
                     while (it != tempm->end())
                     {
                         leftit = templeft->find(it->first);
@@ -2116,8 +2046,8 @@ jvar operator%(jvar left, const jvar &right)
                 case JLONGINTEGER:
                 case JNUMBER:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
                     while (it != tempm->end())
                     {
                         it->second = it->second % right;
@@ -2127,10 +2057,10 @@ jvar operator%(jvar left, const jvar &right)
                 break;
                 case JOBJECT:
                 {
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) right.buffer;
-                    std::map<std::string, jvar> *templeft =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
-                    std::map<std::string, jvar>::iterator leftit = templeft->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) right.buffer;
+                    jMapType<std::string, jvar> *templeft =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar>::iterator leftit = templeft->begin();
                     while (it != tempm->end())
                     {
                         leftit = templeft->find(it->first);
@@ -2253,10 +2183,10 @@ bool operator==(const jvar &left, const jvar &right)
                     if ( mapSize!=((jvar)right).size() )
                         return false;
                     
-                    std::map<std::string, jvar> *tempm =(std::map<std::string, jvar> *) right.buffer;
-                    std::map<std::string, jvar> *templeft =(std::map<std::string, jvar> *) left.buffer;
-                    std::map<std::string, jvar>::iterator it = tempm->begin();
-                    std::map<std::string, jvar>::iterator leftit = templeft->begin();
+                    jMapType<std::string, jvar> *tempm =(jMapType<std::string, jvar> *) right.buffer;
+                    jMapType<std::string, jvar> *templeft =(jMapType<std::string, jvar> *) left.buffer;
+                    jMapType<std::string, jvar>::iterator it = tempm->begin();
+                    jMapType<std::string, jvar>::iterator leftit = templeft->begin();
                     while (it != tempm->end())
                     {
                         leftit = templeft->find(it->first);
@@ -2282,6 +2212,10 @@ bool operator==(const jvar &left, const jvar &right)
 bool operator!=(const jvar &left, const jvar &right)
 {
     return !(left==right);
+}
+const bool jvar::operator!()
+{
+    return !((*this).asBoolean());
 }
 
 
@@ -2781,9 +2715,10 @@ jvar operator%(long long int left, const jvar &right)
     jvar ret = jvar(left) % right;
     return ret;
 }
+
 bool operator==(jvar left, const bool &right)
 {
-    return left == jvar(right);
+    return left.asBoolean() == right;
 }
 bool operator==(jvar left, const double &right)
 {
@@ -2819,7 +2754,7 @@ bool operator==(jvar left, const char right[])
 }
 bool operator==(bool left, const jvar &right)
 {
-    return jvar(left) == right;
+    return left == ((jvar)right).asBoolean();
 }
 bool operator==(double left, const jvar &right)
 {
@@ -2856,6 +2791,10 @@ bool operator==(const char left[], const jvar &right)
 
 
 
+bool operator!=(jvar left, const bool &right)
+{
+    return left.asBoolean() != right;
+}
 bool operator!=(jvar left, const double &right)
 {
     return left != jvar(right);

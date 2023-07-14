@@ -1,5 +1,7 @@
 #include "./UNet.h"
+#include "./ParallelLogger.hpp"
 #include <iostream>
+#include <thread>
 
 jvar sendRequest(enum httpmethod method,std::string url,jvar body, jvar headersArg, bool parseJson)
 {
@@ -35,7 +37,7 @@ jvar sendRequest(enum httpmethod method,std::string domain, std::string path,jva
     cli.set_connection_timeout(20, 0);
     cli.set_read_timeout(20, 0); 
     cli.set_write_timeout(20, 0);
-    
+    loginfo("Sending request::",domain,path,method,body,headersArg);
 
     httplib::Result res({nullptr, httplib::Error()});
     httplib::Headers headers;
@@ -64,6 +66,7 @@ jvar sendRequest(enum httpmethod method,std::string domain, std::string path,jva
                 "httpstatus" << jv 500
             };
     }
+    
     if(res)
     {
         result["httpstatus"] = res->status;
@@ -119,4 +122,14 @@ jvar sendRequest(jvar route,jvar body, jvar additionalHeaders)
             "methodPassed" << method
         };
     return sendRequest(methodEn,route["domain"].asString(),route["path"].asString(),body,allHeaders,route["parseJson"]);
+}
+void callSendRequest(jvar route,jvar body, jvar additionalHeaders)
+{
+    jvar res = sendRequest(route,body, additionalHeaders);
+    loginfo(__FILE__,__LINE__,res);
+}
+void sendRequestAsync(jvar route,jvar body, jvar additionalHeaders)
+{
+    auto a = std::thread(callSendRequest,route,body,additionalHeaders);
+    a.detach();
 }

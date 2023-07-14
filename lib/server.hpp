@@ -144,7 +144,7 @@ class MyApp{
         loginfo("Starting to listen at port",config["port"].asInteger());
         if (!svr.listen("localhost", config["port"].asInteger()))
         {
-            logerror("Failed to listen at port",config["port"].asInteger(),"is it in use ?");
+            logerror(__FILE__,"row",__LINE__,"Failed to listen at port",config["port"].asInteger(),"is it in use ?");
         }
         svr.stop(); 
     }
@@ -282,7 +282,7 @@ void processRequests(const httplib::Request& req, httplib::Response& res, Route 
     MDC::put("path",req.path);
     MDC::put("method",req.method);
     MDC::put("body",req.body);
-    MDC::put("headers",ctx["requestHeaders"]);
+    //MDC::put("headers",ctx["requestHeaders"]);
     MDC::put("params",ctx["params"]);
     loginfo("Request Received");
     bool result;

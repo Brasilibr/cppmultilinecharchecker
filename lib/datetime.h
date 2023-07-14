@@ -16,6 +16,7 @@ private:
     short hour;
     char minutes;
     char seconds;
+    char timeZone;
     void setInfo(const struct tm &timeinfo);
 public:
     /*starts with now time */
@@ -30,6 +31,7 @@ public:
     char getDays();
     char getMonths();
     int getYears();
+    void setTimeZone(char zone);
     MYSQL_TIME toMYSQLTime();
     struct tm toLocalTime();
     Time64_T toTimeStamp();

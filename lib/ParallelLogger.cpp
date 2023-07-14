@@ -2,6 +2,24 @@
 
 bool openLogger = true;
 
+void cleanContext(jvar & myvar)
+{
+  size_t maxSize=256;
+  for(jvar & item: myvar)
+  {
+    if (item.isString())
+    {
+      if (item.size()>maxSize)
+      {
+        item = item.substr(0,maxSize)+"...";
+      }
+    }
+    if (item.isObject())
+    {
+      cleanContext(item);
+    }
+  }
+}
 void loggerThread()
 {
   std::cout << "Logging Started" << std::endl;
@@ -10,12 +28,14 @@ void loggerThread()
   while(openLogger)
   {
     logData mydata = LogStuff::inputQueue.wait_and_pop();
+    jvar context = MDC::get(mydata.threadId);
+    cleanContext(context);
+    //context=jo{};
     std::cout << "\033[" << start[mydata.logLevel]; //1 = bold; 31 = red
-    std::cout <<"\033[4m" << mydata.now.toString() << "::" << LogStuff::logLevelsText[mydata.logLevel] <<"\033[24m" << " " << mydata.msg << " ctx:" << MDC::get(mydata.threadId) << "   tid:" << mydata.threadId << "\n";
+    std::cout <<"\033[4m" << mydata.now.toString() << "::" << LogStuff::logLevelsText[mydata.logLevel] <<"\033[24m" << " " << mydata.msg << " ctx:" << context << "   tid:" << mydata.threadId << "\n";
     std::cout << "\033[0m";
   }
 }
-
 std::map<std::string, ThreadContextData> MDC::contexts;
 
 void MDC::put(std::string key, jvar value){
@@ -93,6 +113,7 @@ ConcurrentQueue<logData> LogStuff::inputQueue;
 std::string LogStuff::logLevelsText[4] = {"debug","info","warn","error"};
 
 auto t1 = std::thread(loggerThread);
+
 
 void closeLogger()
 {

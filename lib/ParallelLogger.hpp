@@ -18,14 +18,17 @@ public:
   DateTime now;
   int logLevel;
   std::thread::id threadId;
- std::string msg;
+  std::string msg;
+  logData(){
+    msg="";
+    logLevel=1;
+  }
 };
 class LogStuff{
 public:
   static ConcurrentQueue<logData> inputQueue;
   static std::string logLevelsText[4];
 };
-
 
 
 inline void _logLoop(logData &data,std::stringstream &strm)

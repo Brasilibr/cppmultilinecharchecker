@@ -84,7 +84,7 @@
             db.setDb(dbName);
         jvar result = db.runCommand(query,paramsarg);
         if (!result["ok"])
-            logerror("ParallelDB Run Command:",result["msg"].asString());
+            logerror(__FILE__,"row",__LINE__,"ParallelDB Run Command:",result["msg"].asString());
         pool->_addParallelQueryResult(myid,result);
     }
     void runQueryInParallel(std::string query, std::vector<MysqlInput> paramsarg,std::string myid, ParallelDb * pool, std::string dbName)
@@ -94,7 +94,7 @@
             db.setDb(dbName);
         jvar result = db.runParamQuery(query,paramsarg);
         if (!result["ok"])
-            logerror("ParallelDB Run Query:",result["msg"].asString());
+            logerror(__FILE__,"row",__LINE__,"ParallelDB Run Query:",result["msg"].asString());
         pool->_addParallelQueryResult(myid,result);
     }
     void ParallelDb::setDb(std::string dbNameArg)

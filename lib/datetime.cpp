@@ -9,6 +9,7 @@ DateTime::DateTime()
     struct tm * timeinfo;
     timeinfo = localtime64 (&current_time);
     setInfo(*timeinfo);
+    timeZone=0;
 }
 
 void DateTime::setInfo(const struct tm &timeinfo)
@@ -19,6 +20,7 @@ void DateTime::setInfo(const struct tm &timeinfo)
     hour = timeinfo.tm_hour;
     minutes = timeinfo.tm_min;
     seconds = timeinfo.tm_sec;
+    timeZone=0;
 }
 
 DateTime::DateTime(int yearsarg,char monthsarg,char daysarg , short hourarg, char minarg, char secarg)
@@ -29,10 +31,12 @@ DateTime::DateTime(int yearsarg,char monthsarg,char daysarg , short hourarg, cha
     hour = hourarg;
     minutes = minarg;
     seconds = secarg;
+    timeZone=0;
 }
 DateTime::DateTime (Time64_T timeStamp)
 {
     struct tm * timeinfo;
+    timeZone=0;
     timeinfo = localtime64 (&timeStamp);
     setInfo(*timeinfo);
 }
@@ -48,6 +52,7 @@ DateTime::DateTime (const MYSQL_TIME &sqlTime)
     hour=sqlTime.hour;
     minutes=sqlTime.minute;
     seconds=sqlTime.second;
+    timeZone=0;
 }
 short DateTime::getHour(){return hour;}
 char DateTime::getMinutes(){return minutes;}
@@ -85,6 +90,10 @@ Time64_T DateTime::toTimeStamp()
     Time64_T stamp = mktime64(&timeinfo);
     return stamp;
 }
+void  DateTime::setTimeZone(char zone){
+    if (zone>=-12 && zone <=14)
+        timeZone=zone;
+}
 std::string DateTime::toString()
 {
     std::string ret ="";
@@ -107,7 +116,7 @@ std::string DateTime::toString()
     else
         ret += std::to_string(days);
 
-    ret += " ";   
+    ret += "T";   
     if (hour<10 && hour>=0)
         ret += "0"+std::to_string(hour) + ":";
     else
@@ -122,6 +131,17 @@ std::string DateTime::toString()
         ret +=  "0"+std::to_string(seconds) ;
     else
         ret += std::to_string(seconds) ;
+
+    if (timeZone<0)
+        ret +="-";
+    else
+        ret +="+";
+    if (abs(timeZone)<10 && abs(timeZone)>=0)
+        ret +=  "0"+std::to_string(abs(timeZone)) ;
+    else
+        ret += std::to_string(abs(timeZone)) ;
+    ret +=":00";
+
     return ret;
 }
 
@@ -237,11 +257,11 @@ Date::Date(std::string yyyymmdd)
     months = std::stoi(yyyymmdd.substr(5,2));
     days = std::stoi(yyyymmdd.substr(8,2));
     }catch (const std::invalid_argument & e) {
-        logerror("Date string to date conversion failed:",e.what());
+        logerror(__FILE__,"row",__LINE__,"Date string to date conversion failed:",e.what());
         years = 1900;months = 1;days = 1;
     }
     catch (const std::out_of_range & e) {
-        logerror("Date string to date conversion failed:",e.what());
+        logerror(__FILE__,"row",__LINE__,"Date string to date conversion failed:",e.what());
         years = 1900;months = 1;days = 1;
     }
 }

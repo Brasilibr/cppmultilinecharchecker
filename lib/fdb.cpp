@@ -239,7 +239,7 @@ bool Fdb::connect()
     if (conRes==NULL)
     {
         //failed
-        logerror("DB Connection to",user,"@",dbName,"-",host.c_str(),":",port,"Failed Error:",mysql_error(con));
+        logerror(__FILE__,"row",__LINE__,"DB Connection to",user,"@",dbName,"-",host.c_str(),":",port,"Failed Error:",mysql_error(con));
         mysql_close(con);
         con=NULL;
         return false;
@@ -433,7 +433,7 @@ MYSQL_STMT * Fdb::startParamQuery(std::string query, std::vector<MysqlInput> par
         connect();
         if (con==NULL)
         {
-            logerror("DB Err, not connected to db");
+            logerror(__FILE__,"row",__LINE__,"DB Err, not connected to db");
             return NULL;
         }
     }
@@ -441,14 +441,14 @@ MYSQL_STMT * Fdb::startParamQuery(std::string query, std::vector<MysqlInput> par
     stmt = mysql_stmt_init (con);
     if (NULL == stmt)
     {
-        logerror("DB Err, stmt Init",mysql_error(con));
+        logerror(__FILE__,"row",__LINE__,"DB Err, stmt Init",mysql_error(con));
         return NULL;
     }
     if (mysql_stmt_prepare (stmt, query.c_str(), query.size()))
     {
         mysql_stmt_close (stmt);
         std::string errorMsg =  std::string(mysql_stmt_error(stmt));
-        logerror("DB Err, stmt prepare statement",errorMsg,"query:",query);
+        logerror(__FILE__,"row",__LINE__,"DB Err, stmt prepare statement",errorMsg,"query:",query);
         if (errorMsg.find("server has gone away") != std::string::npos)
         {//try to reconnect and start stmt
             mysql_close(con);
@@ -481,7 +481,7 @@ jvar Fdb::runParamQuery(std::string query, std::vector<MysqlInput> paramsarg)
     {
         mysql_stmt_close (stmt);
         retorno["msg"] = "Erro: Sql Param Requested/Suplied Mismatch " + std::string( std::to_string(param_count) + "/" + std::to_string(paramsSize) );
-        logerror("DB err2 Sql Param Requested/Suplied Mismatch (",param_count,"/",paramsSize,")");
+        logerror(__FILE__,"row",__LINE__,"DB err2 Sql Param Requested/Suplied Mismatch (",param_count,"/",paramsSize,")");
         return retorno;
     }
     MYSQL_BIND *bparams;
@@ -501,7 +501,7 @@ jvar Fdb::runParamQuery(std::string query, std::vector<MysqlInput> paramsarg)
         {
             mysql_stmt_close (stmt);
             delete[] bparams;
-            logerror("DB bind param:",mysql_stmt_error(stmt));
+            logerror(__FILE__,"row",__LINE__,"DB bind param:",mysql_stmt_error(stmt));
             return retorno;
         }
     }
@@ -516,7 +516,7 @@ jvar Fdb::runParamQuery(std::string query, std::vector<MysqlInput> paramsarg)
     {
             mysql_stmt_close (stmt);
             delete[] bparams;
-            logerror("DB stmt execute:",mysql_stmt_error(stmt));
+            logerror(__FILE__,"row",__LINE__,"DB stmt execute:",mysql_stmt_error(stmt));
             return retorno;
     }
 
@@ -534,7 +534,7 @@ jvar Fdb::runParamQuery(std::string query, std::vector<MysqlInput> paramsarg)
         }
         else
         {
-            logerror("DB err5 metadata:",mysql_stmt_error(stmt));
+            logerror(__FILE__,"row",__LINE__,"DB err5 metadata:",mysql_stmt_error(stmt));
         }
             mysql_stmt_close (stmt);
             delete[] bparams;
@@ -589,7 +589,7 @@ jvar Fdb::runParamQuery(std::string query, std::vector<MysqlInput> paramsarg)
         delete[] isnulls;
         delete[] errors;
         delete[] sizes;
-        logerror("DB err6 store result:",mysql_stmt_error(stmt));
+        logerror(__FILE__,"row",__LINE__,"DB err6 store result:",mysql_stmt_error(stmt));
         return retorno;
     }
     
@@ -608,7 +608,7 @@ jvar Fdb::runParamQuery(std::string query, std::vector<MysqlInput> paramsarg)
         delete[] isnulls;
         delete[] errors;
         delete[] sizes;
-        logerror("DB err7 bind result:",mysql_stmt_error(stmt));
+        logerror(__FILE__,"row",__LINE__,"DB err7 bind result:",mysql_stmt_error(stmt));
         return retorno;
     }
     size_t row_count = 0;
@@ -624,6 +624,7 @@ jvar Fdb::runParamQuery(std::string query, std::vector<MysqlInput> paramsarg)
             logwarn("DB data truncated!");
             
         jo row = jo();
+        row.reserve(column_count);//reserve memory space for all column itens
         for(size_t i=0; i<column_count; i++)
         {
             row[fieldNames[i]] = bindToJvar(&bresult[i]);
@@ -646,7 +647,7 @@ jvar Fdb::runParamQuery(std::string query, std::vector<MysqlInput> paramsarg)
     delete[] sizes; 
     
     if (mysql_stmt_free_result(stmt))
-        logerror("DB stmt Free Err:",mysql_stmt_error(stmt));
+        logerror(__FILE__,"row",__LINE__,"DB stmt Free Err:",mysql_stmt_error(stmt));
     
     retorno["ok"]=true;
     mysql_stmt_close (stmt);

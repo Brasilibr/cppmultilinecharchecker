@@ -172,7 +172,7 @@ std::string Fjwt::makeToken(
     }
    }catch(std::exception &e)
    {
-       logerror("FJWT Create Token:",e.what());
+       logerror(__FILE__,"row",__LINE__,"FJWT Create Token:",e.what());
    }
     return token;
 }
@@ -185,6 +185,8 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
         std::string algorithm = decoded.get_algorithm();
         jwt::verifier<jwt::default_clock,jwt::picojson_traits> verifier(jwt::default_clock{});
         bool verified = false;
+        auto issueTime = decoded.get_issued_at().time_since_epoch().count();
+        loginfo("Issue Time:",issueTime);
     /*REMOVING THIS OPTIONS AS THEY POSE A SECURITY RISK
     //https://connect2id.com/products/nimbus-jose-jwt/vulnerabilities
     if (algorithm=="HS256")
@@ -209,10 +211,13 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
         verified=true;
     }
     */
+   //to account for generating tokens in the future, in seconds
+   size_t leeWay = 120;
     if (algorithm=="RS256")
     {
         verifier = jwt::verify()
         .with_issuer(issuer)
+        .issued_at_leeway(leeWay)
         .allow_algorithm(jwt::algorithm::rs256(pub_key,"","",""));
         verified=true;
     }
@@ -220,6 +225,7 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
     {
         verifier = jwt::verify()
         .with_issuer(issuer)
+        .issued_at_leeway(leeWay)
         .allow_algorithm(jwt::algorithm::rs384(pub_key,"","",""));
         verified=true;
     }
@@ -227,6 +233,7 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
     {
         verifier = jwt::verify()
         .with_issuer(issuer)
+        .issued_at_leeway(leeWay)
         .allow_algorithm(jwt::algorithm::rs512(pub_key,"","",""));
         verified=true;
     }
@@ -234,6 +241,7 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
     {
         verifier = jwt::verify()
         .with_issuer(issuer)
+        .issued_at_leeway(leeWay)
         .allow_algorithm(jwt::algorithm::es256(pub_key,"","",""));
         verified=true;
     }
@@ -241,6 +249,7 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
     {
         verifier = jwt::verify()
         .with_issuer(issuer)
+        .issued_at_leeway(leeWay)
         .allow_algorithm(jwt::algorithm::es384(pub_key,"","",""));
         verified=true;
     }
@@ -248,6 +257,7 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
     {
         verifier = jwt::verify()
         .with_issuer(issuer)
+        .issued_at_leeway(leeWay)
         .allow_algorithm(jwt::algorithm::es512(pub_key,"","",""));
         verified=true;
     }
@@ -255,6 +265,7 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
     {
         verifier = jwt::verify()
         .with_issuer(issuer)
+        .issued_at_leeway(leeWay)
         .allow_algorithm(jwt::algorithm::ps256(pub_key,"","",""));
         verified=true;
     }
@@ -262,6 +273,7 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
     {
         verifier = jwt::verify()
         .with_issuer(issuer)
+        .issued_at_leeway(leeWay)
         .allow_algorithm(jwt::algorithm::ps384(pub_key,"","",""));
         verified=true;
     }
@@ -269,6 +281,7 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
     {
         verifier = jwt::verify()
         .with_issuer(issuer)
+        .issued_at_leeway(leeWay)
         .allow_algorithm(jwt::algorithm::ps512(pub_key,"","",""));
         verified=true;
     }
@@ -276,6 +289,7 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
     {
         verifier = jwt::verify()
         .with_issuer(issuer)
+        .issued_at_leeway(leeWay)
         .allow_algorithm(jwt::algorithm::ed25519(pub_key,"","",""));
         verified=true;
     }
@@ -283,6 +297,7 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
     {
         verifier = jwt::verify()
         .with_issuer(issuer)
+        .issued_at_leeway(leeWay)
         .allow_algorithm(jwt::algorithm::ed448(pub_key,"","",""));
         verified=true;
     }
@@ -293,7 +308,7 @@ bool Fjwt::validateToken(std::string token, std::string pub_key, std::string iss
     return true;
     }catch(std::exception &e)
     {
-        logerror("FJWT Validate Token:",e.what());
+        logerror(__FILE__,"row",__LINE__,"FJWT Validate Token:",e.what());
         return false;
     }
     return false;
@@ -315,7 +330,7 @@ jvar Fjwt::getClaims(std::string token)
         }
     }catch(std::exception &e)
     {
-        logerror("FJWT Get Claims:",e.what());
+        logerror(__FILE__,"row",__LINE__,"FJWT Get Claims:",e.what());
         ret = jo {};
     }
     return ret;
