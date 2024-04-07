@@ -2,6 +2,19 @@
 
 bool openLogger = true;
 
+
+int LogStuff::logLevel=1;
+std::mutex LogStuff::logLevelMutex;
+
+void LogStuff::setLogLevel(int level){
+  std::unique_lock<std::mutex> ulk(logLevelMutex);
+  if (level>3)
+    level=3;
+  if (level<0)
+    level=0;
+  logLevel=level;
+};
+
 void cleanContext(jvar & myvar)
 {
   size_t maxSize=256;

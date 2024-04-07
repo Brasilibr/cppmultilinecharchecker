@@ -25,9 +25,14 @@ public:
   }
 };
 class LogStuff{
+private:
+  static std::mutex logLevelMutex;
 public:
   static ConcurrentQueue<logData> inputQueue;
   static std::string logLevelsText[4];
+  static int logLevel;
+  /*0=debug,1=info,2=warn,3=error*/
+  static void setLogLevel(int level);
 };
 
 
@@ -47,6 +52,8 @@ inline void _logLoop(struct logData &data,std::stringstream &strm,T var1, Types.
 template <typename... Types>
 inline void log(Types... var2)
 {
+     if (LogStuff::logLevel>1)
+       return;
      logData data;
      data.logLevel=1;
      data.threadId = std::this_thread::get_id();
@@ -57,6 +64,8 @@ inline void log(Types... var2)
 template <typename... Types>
 inline void logdebug(Types... var2)
 {
+     if (LogStuff::logLevel>0)
+       return;
      logData data;
      data.logLevel=0;
      data.threadId = std::this_thread::get_id();
@@ -66,6 +75,8 @@ inline void logdebug(Types... var2)
 template <typename... Types>
 inline void loginfo(Types... var2)
 {
+     if (LogStuff::logLevel>1)
+       return;
      logData data;
      data.logLevel=1;
      data.threadId = std::this_thread::get_id();
@@ -75,6 +86,8 @@ inline void loginfo(Types... var2)
 template <typename... Types>
 inline void logwarn(Types... var2)
 {
+     if (LogStuff::logLevel>2)
+       return;
      logData data;
      data.logLevel=2;
      data.threadId = std::this_thread::get_id();

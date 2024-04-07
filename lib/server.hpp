@@ -10,10 +10,14 @@
 #include <map>
 #include "ParallelLogger.hpp"
 
+#ifdef E_DROGON
+#include <drogon/drogon.h>
+#endif
+
 using namespace std::chrono_literals;
 
 #define DEFAULT_DESIRED_IDLE_MEMORY 52428800 //50 mb
-#define DEFAULT_DESIRED_RELEASE_THRESHOLD 67108864*2 //64 MB
+#define DEFAULT_DESIRED_RELEASE_THRESHOLD 67108864*2 //128 MB
 #define DEFAULT_TIME_TO_CHECK_RELEASE_MEMORY 5 //5 seconds
 
 void memoryFree();
@@ -44,6 +48,7 @@ public:
         return filters;
     }
 };
+
 
 
 
@@ -129,6 +134,7 @@ class MyApp{
         }
         return NULL;
     }
+    #ifndef E_DROGON
     void start(jvar &config, bool &actionBodyExists)
     {
         if (actionBodyExists)
@@ -148,6 +154,78 @@ class MyApp{
         }
         svr.stop(); 
     }
+    #else
+    void start(jvar &config,bool &actionBodyExists)
+    {
+        if (actionBodyExists)
+            return runAsAction(config);
+        setConfig(config);
+        std::thread t1(memoryFree);
+        t1.detach();
+
+        //drogon::app().registerWebSocketController("/websocket","EchoWebsock");
+        drogon::app()
+         .addListener("0.0.0.0", config["port"].asInteger())
+         .setThreadNum(config["threads"].asInteger());
+
+         drogon::app().setDefaultHandler(
+                    [](const drogon::HttpRequestPtr& drogonReq,
+                       std::function<void (const drogon::HttpResponsePtr &)> &&callback)
+                    {
+                        auto &requestData = (*drogonReq.get());
+
+                        httplib::Request req;
+                        httplib::Response res;
+                        auto methodEnumVal = requestData.getMethod();
+
+                        req.method = requestData.getMethodString();
+                        req.path = requestData.getPath();
+                        std::multimap<std::string, std::string> params;
+                        for(auto &field : requestData.getHeaders())
+                        {
+                            std::string fieldName = field.first;
+                            req.set_header(fieldName.c_str(),field.second);
+                        }
+                        for(auto &field : requestData.getParameters())
+                        {
+                            std::string fieldName = field.first;
+                            params.emplace(fieldName,field.second);
+                        }
+                        req.params = params;
+                        std::transform(req.method.begin(), req.method.end(), req.method.begin(),
+                        [](unsigned char c){ return std::tolower(c); });
+                        if (methodEnumVal==drogon::HttpMethod::Options)
+                            processOptions(req,res);
+                        if (methodEnumVal==drogon::HttpMethod::Get)
+                            processGetRequests(req,res);
+                        if (methodEnumVal==drogon::HttpMethod::Post)
+                            processPostRequests(req,res);
+                        if (methodEnumVal==drogon::HttpMethod::Patch)
+                            processPatchRequests(req,res);
+                        if (methodEnumVal==drogon::HttpMethod::Delete)
+                            processDeleteRequests(req,res);
+                        auto resp = drogon::HttpResponse::newHttpResponse();
+                        resp->setContentTypeCodeAndCustomString(drogon::ContentType::CT_APPLICATION_JSON, "application/json");
+                        resp->setBody(res.body);
+                        auto &respData = (*resp.get());
+                        
+                        respData.setStatusCode((drogon::HttpStatusCode)((size_t)res.status));
+                        jvar resultHeaders = ja{};
+                        for (auto it = res.headers.begin(); it != res.headers.end(); ++it)
+                        {
+                            std::string headerName = it->first;
+                            std::transform(headerName.begin(), headerName.end(), headerName.begin(),
+                            [](unsigned char c){ return std::tolower(c); });
+                            respData.addHeader(headerName,it->second);
+                        }
+                        callback(resp);
+        });
+
+        loginfo("Starting to listen at port",config["port"].asInteger());
+        drogon::app().run();
+    }
+    #endif
+
     void runAsAction(jvar &actionRequestBody)
     {
         setConfig(actionRequestBody);
@@ -202,9 +280,9 @@ class MyApp{
             "body" << jv res.body,
             "headers" << resultHeaders
         };
-        loginfo("{\"Action Output\":",result,"}");
-        
+        std::cout << "{\"Action Output\":" << result << "}" << std::endl;;
     }
+
 };
 
 MyApp app;
